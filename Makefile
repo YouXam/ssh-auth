@@ -1,5 +1,5 @@
 ssh-auth: src/main.go
-	cd src && go build -o ../ssh-auth
+	cd src && go mod tidy && go build -o ../ssh-auth
 
 clean:
 	rm ssh-auth

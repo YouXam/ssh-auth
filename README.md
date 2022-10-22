@@ -52,7 +52,7 @@ ssh-auth server [-p port] [-P] [-i path] [-n name] [user@]hostname
 
 **-P**: 使用密码，密码将会**明文**保存
 
-**-i path**: 使用公钥，path 为公钥路径，公钥将会保存
+**-i path**: 使用私钥，path 为私钥路径，私钥将会**明文**保存
 
 **-n name**: 给服务器设置别名
 
@@ -63,7 +63,7 @@ ssh-auth server [-p port] [-P] [-i path] [-n name] [user@]hostname
 ### 添加指定成员的所有公钥到指定服务器
 
 ```shell
-ssh-auth copy [-p port] [-P] [-i path] <servername|[username@]hostname> <user> [user2 [user3 ...]]
+ssh-auth copy [-p port] [-P] [-i path] <user> [user2 [user3 ...]] <servername|[username@]hostname> 
 ```
 
 成员和服务器关系将会保存。
@@ -72,15 +72,15 @@ ssh-auth copy [-p port] [-P] [-i path] <servername|[username@]hostname> <user> [
 
 **-P**: 使用密码连接服务器，覆盖已保存设置，密码将**不会**保存
 
-**-i path**: 使用公钥，path 为公钥路径，覆盖已保存设置，公钥将**不会**保存
+**-i path**: 使用私钥，path 为私钥路径，覆盖已保存设置，私钥将**不会**保存
+
+**user, user2, user3, ...**: 成员名
 
 **servername** 服务器别名
 
 **username**: 服务器用户名，默认为当前用户名
 
 **hostname**: 主机名或 IP 地址
-
-**user, user2, user3, ...**: 成员名
 
 ### 根据保存的成员和服务器关系重新同步公钥
 

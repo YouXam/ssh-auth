@@ -12,9 +12,9 @@ var (
 	flagHelp       = flag.Bool("help", false, "print ssh-auth command line options")
 	flagVersion    = flag.Bool("version", false, "print ssh-auth version")
 	flagPassword   = flag.Bool("P", false, "use password to connect server")
-	flagPublicKey  = flag.String("i", "", "public key to connect server")
+	flagPrivateKey = flag.String("i", "", "private key to connect server")
 	flagServerName = flag.String("n", "", "server name")
-	flagPort       = flag.Int("p", 22, "server port")
+	flagPort       = flag.Int("p", 0, "server port")
 )
 
 func Usage() {
@@ -30,13 +30,13 @@ COMMANDS
 		Add server.
 			-p: server port, default value is 22.
 			-P: use password to connect server, it will be saved in clear text.
-			-i: public keys to connect server, it will be saved.
+			-i: private key to connect server, it will be saved in clear text.
 			-n: name of server.
-	ssh-auth copy [-p port] [-P] [-i path] <servername|[username@]hostname> <user> [user2 [user3 ...]]
+	ssh-auth copy [-p port] [-P] [-i path] <user> [user2 [user3 ...]] <servername|[username@]hostname> 
 		Copy public keys to remote machine.
 			-p: server port, default value is 22.
-			-P: use password to connect server, it will be saved in clear text.
-			-i: public keys to connect server, it will be saved.
+			-P: use password to connect server, it will not be saved.
+			-i: private key to connect server, it will not be saved.
 	ssh-auth sync
 		Synchronize the public key of all servers.`)
 }
@@ -77,14 +77,14 @@ func main() {
 			Usage()
 			os.Exit(1)
 		}
-		addServer(args[0], *flagPort, *flagPassword, *flagPublicKey, *flagServerName)
+		addServer(args[0], *flagPort, *flagPassword, *flagPrivateKey, *flagServerName)
 	case "copy":
 		if len(args) < 2 {
 			fmt.Println("Missing necessary argument.")
 			Usage()
 			os.Exit(1)
 		}
-		copyPublicKeys(args[0], args[1:], *flagPassword, *flagPublicKey)
+		copyPublicKeys(args[len(args)-1], *flagPort, args[:len(args)-1], *flagPassword, *flagPrivateKey)
 	case "sync":
 		syncPublicKeys()
 	default:
