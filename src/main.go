@@ -1,7 +1,93 @@
 package main
 
-import "fmt"
+import (
+	"flag"
+	"fmt"
+	"os"
+)
+
+const VERSION = "0.0.1"
+
+var (
+	flagHelp       = flag.Bool("help", false, "print ssh-auth command line options")
+	flagVersion    = flag.Bool("version", false, "print ssh-auth version")
+	flagPassword   = flag.Bool("P", false, "use password to connect server")
+	flagPublicKey  = flag.String("i", "", "public key to connect server")
+	flagServerName = flag.String("n", "", "server name")
+	flagPort       = flag.Int("p", 22, "server port")
+)
+
+func Usage() {
+	fmt.Println(`ssh-auth - manage multi-user logins on remote machines using imported keys
+SYNOPSIS
+	ssh-auth --version
+	ssh-auth --help
+	ssh-auth <command> [<args>]
+COMMANDS
+	ssh-auth user <name> [path [path2 [path3 ...]]]
+		Import public keys, and add user when user is not exists.
+	ssh-auth server [-p port] [-P] [-i path] [-n name] [user@]hostname
+		Add server.
+			-p: server port, default value is 22.
+			-P: use password to connect server, it will be saved in clear text.
+			-i: public keys to connect server, it will be saved.
+			-n: name of server.
+	ssh-auth copy [-p port] [-P] [-i path] <servername|[username@]hostname> <user> [user2 [user3 ...]]
+		Copy public keys to remote machine.
+			-p: server port, default value is 22.
+			-P: use password to connect server, it will be saved in clear text.
+			-i: public keys to connect server, it will be saved.
+	ssh-auth sync
+		Synchronize the public key of all servers.`)
+}
 
 func main() {
-	fmt.Println("hello ssh-auth")
+	initDatabase()
+
+	flag.Parse()
+	if *flagVersion {
+		fmt.Println(VERSION)
+		return
+	}
+	if *flagHelp {
+		Usage()
+		return
+	}
+	if len(os.Args) < 2 {
+		fmt.Println("No subcommand found.")
+		Usage()
+		os.Exit(1)
+	}
+	command := os.Args[1]
+	os.Args = os.Args[1:]
+	// parse args again to skip subcommand
+	flag.Parse()
+	args := flag.Args()
+	switch command {
+	case "user":
+		if len(args) < 1 {
+			fmt.Println("Missing necessary argument: name.")
+			Usage()
+			os.Exit(1)
+		}
+		addUser(args[0], args[1:])
+	case "server":
+		if len(args) < 1 {
+			fmt.Println("Missing necessary argument: destination.")
+			Usage()
+			os.Exit(1)
+		}
+		addServer(args[0], *flagPort, *flagPassword, *flagPublicKey, *flagServerName)
+	case "copy":
+		if len(args) < 2 {
+			fmt.Println("Missing necessary argument.")
+			Usage()
+			os.Exit(1)
+		}
+		copyPublicKeys(args[0], args[1:], *flagPassword, *flagPublicKey)
+	case "sync":
+		syncPublicKeys()
+	default:
+		fmt.Println("Invalid subcommand.")
+	}
 }
