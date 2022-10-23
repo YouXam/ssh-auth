@@ -7,6 +7,7 @@ import (
 )
 
 func copyPublicKeysWithRemote(r Remote, name []string, info bool) {
+	// When "info" is true, the function is called concurrently, so print log only one time.
 	sftpClient := connect(r, info)
 	defer func() { fatalErr(sftpClient.Close()) }()
 	remotePath := "/home/" + r.username + "/.ssh/authorized_keys"
@@ -16,7 +17,7 @@ func copyPublicKeysWithRemote(r Remote, name []string, info bool) {
 	srcFile, err := sftpClient.Open(remotePath)
 	fatalErr(err)
 	defer func() { fatalErr(srcFile.Close()) }()
-
+	// read remote file and check
 	data, err := io.ReadAll(srcFile)
 	fatalErr(err)
 	content := string(data)
@@ -30,6 +31,7 @@ func copyPublicKeysWithRemote(r Remote, name []string, info bool) {
 			publicKeysMap[key] = true
 		}
 	}
+	// insert public key when it is not exists
 	cnt := 0
 	for _, e := range name {
 		res := findPublicKeys(e)
@@ -44,7 +46,7 @@ func copyPublicKeysWithRemote(r Remote, name []string, info bool) {
 	srcFile2, err := sftpClient.Create(remotePath)
 	fatalErr(err)
 	defer func() { fatalErr(srcFile2.Close()) }()
-
+	// write new content to remote file
 	_, err = srcFile2.Write([]byte(newContent))
 	fatalErr(err)
 	if info {
@@ -99,26 +101,26 @@ func syncPublicKeys(serversName []string) {
 			servers = append(servers, r)
 		}
 	}
-	links := map[int][]string{}
-	for _, e := range servers {
-		links[e.id] = findLinks(e.id)
-	}
 	cnt := len(servers)
 	cnt2 := cnt
+	// maximum concurrency: 10
 	next := make(chan int, 10)
 	stop := make(chan int)
 	for _, r := range servers {
-		users := links[r.id]
+		// wait to execution
 		next <- 1
 		go func(des Remote) {
+			// sqlite support query concurrently, so query links in coroutines
+			copyPublicKeysWithRemote(des, findLinks(des.id), false)
 			<-next
-			copyPublicKeysWithRemote(des, users, false)
+			// continue main coroutines when all jobs are finished
 			cnt -= 1
 			if cnt <= 0 {
 				stop <- 1
 			}
 		}(r)
 	}
+	// wait for jobs are finished
 	<-stop
 	if cnt2 <= 1 {
 		fmt.Printf("Successfully synchronized %d server.\n", cnt2)

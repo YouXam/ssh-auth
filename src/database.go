@@ -52,6 +52,7 @@ func createTable() {
 }
 
 func insertUser(username string) bool {
+	// check weather the user has already exists
 	stmt, err := db.Prepare(`select * from users where username==?`)
 	fatalErr(err)
 	defer func() { fatalErr(stmt.Close()) }()
@@ -70,6 +71,7 @@ func insertUser(username string) bool {
 	return false
 }
 func insertLink(serverId int, username string) bool {
+	// check weather the link has already exists
 	stmt, err := db.Prepare(`select * from links where username==? and serverID=?`)
 	fatalErr(err)
 	defer func() { fatalErr(stmt.Close()) }()
