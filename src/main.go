@@ -86,7 +86,7 @@ func main() {
 		}
 		copyPublicKeys(args[len(args)-1], *flagPort, args[:len(args)-1], *flagPassword, *flagPrivateKey)
 	case "sync":
-		syncPublicKeys()
+		syncPublicKeys(args)
 	default:
 		fmt.Println("Invalid subcommand.")
 	}

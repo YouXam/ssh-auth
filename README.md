@@ -85,5 +85,7 @@ ssh-auth copy [-p port] [-P] [-i path] <user> [user2 [user3 ...]] <servername|[u
 ### 根据保存的成员和服务器关系重新同步公钥
 
 ```shell
-ssh-auth sync
+ssh-auth sync [servername|[username@]hostname] [servername|[username@]hostname] ...
 ```
+
+当不提供服务器列表是，默认重新同步所有服务器的公钥。

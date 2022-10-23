@@ -7,7 +7,7 @@ import (
 func addServer(destination string, port int, usePassword bool, publicKeyPath string, serverName string) {
 	r := parseRemote(port, destination, usePassword, publicKeyPath)
 	fmt.Println("Testing ssh connection...")
-	connect(r)
+	connect(r, true)
 	if insertServer(r.hostname, r.port, r.username, serverName, r.password, r.privateKey) {
 		fmt.Printf("Successfully added server %s.\n", r.toString())
 	} else {
