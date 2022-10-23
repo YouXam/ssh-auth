@@ -9,7 +9,7 @@ import (
 const VERSION = "0.0.1"
 
 var (
-	flagHelp       = flag.Bool("help", false, "print ssh-auth command line options")
+	flagHelp       = flag.Bool("help", false, "print more detailed help information")
 	flagVersion    = flag.Bool("version", false, "print ssh-auth version")
 	flagPassword   = flag.Bool("P", false, "use password to connect server")
 	flagPrivateKey = flag.String("i", "", "private key to connect server")
@@ -37,8 +37,8 @@ COMMANDS
 			-p: server port, default value is 22.
 			-P: use password to connect server, it will not be saved.
 			-i: private key to connect server, it will not be saved.
-	ssh-auth sync
-		Synchronize the public key of all servers.`)
+	ssh-auth sync [servername|[username@]hostname] [servername|[username@]hostname] ...
+		Synchronize the public key of specified servers or all servers.`)
 }
 
 func main() {

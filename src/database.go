@@ -161,7 +161,7 @@ func insertServer(hostname string, port int, username string, servername string,
 }
 
 func findServer(destination string) (Remote, error) {
-	stmt, err := db.Prepare(`select * from servers where name==? or username+'@'+hostname==? or hostname==? and username==?`)
+	stmt, err := db.Prepare(`select * from servers where name==? or username||'@'||hostname==? or hostname==? and username==?`)
 	fatalErr(err)
 	defer func() { fatalErr(stmt.Close()) }()
 	home, err := os.UserHomeDir()
