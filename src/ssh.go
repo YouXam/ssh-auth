@@ -72,6 +72,7 @@ func connect(r Remote, info bool) *sftp.Client {
 	auth := make([]ssh.AuthMethod, 0)
 	if r.privateKey != "" {
 		key, err := ssh.ParsePrivateKey([]byte(r.privateKey))
+		// maybe this private key need a passphrase to decode
 		switch err.(type) {
 		case *ssh.PassphraseMissingError:
 			fmt.Printf("Private Key Passphrase:")
@@ -95,7 +96,7 @@ func connect(r Remote, info bool) *sftp.Client {
 	}
 
 	addr := fmt.Sprintf("%s:%d", r.hostname, r.port)
-
+	// when info is false, which means the function is not called concurrently, print more detailed information
 	if info {
 		fmt.Printf("Connecting %s@%s:%d...", r.username, r.hostname, r.port)
 	}
