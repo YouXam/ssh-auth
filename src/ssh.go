@@ -20,11 +20,12 @@ type Remote struct {
 	password   string
 	privateKey string
 	servername string
+	id         int
 }
 
 func (t Remote) toString() string {
 	if t.servername != "" {
-		return t.servername
+		return t.servername + "(" + t.username + "@" + t.hostname + ":" + strconv.Itoa(t.port) + ")"
 	}
 	return t.username + "@" + t.hostname + ":" + strconv.Itoa(t.port)
 }
@@ -64,10 +65,10 @@ func parseRemote(port int, destination string, usePassword bool, publicKeyPath s
 		}
 		fatalErr(file.Close())
 	}
-	return Remote{username, hostname, port, password, key, *flagServerName}
+	return Remote{username, hostname, port, password, key, *flagServerName, -1}
 }
 
-func connect(r Remote) *sftp.Client {
+func connect(r Remote, info bool) *sftp.Client {
 	auth := make([]ssh.AuthMethod, 0)
 	if r.privateKey != "" {
 		key, err := ssh.ParsePrivateKey([]byte(r.privateKey))
@@ -75,11 +76,11 @@ func connect(r Remote) *sftp.Client {
 		case *ssh.PassphraseMissingError:
 			fmt.Printf("Private Key Passphrase:")
 			password, err := gopass.GetPasswdMasked()
-			fatalErr(err)
+			fatalErrRemote(r, err)
 			key, err = ssh.ParsePrivateKeyWithPassphrase([]byte(r.privateKey), password)
-			fatalErr(err)
+			fatalErrRemote(r, err)
 		default:
-			fatalErr(err)
+			fatalErrRemote(r, err)
 		}
 		auth = append(auth, ssh.PublicKeys(key))
 	}
@@ -95,11 +96,15 @@ func connect(r Remote) *sftp.Client {
 
 	addr := fmt.Sprintf("%s:%d", r.hostname, r.port)
 
-	fmt.Printf("Connecting %s@%s:%d...", r.username, r.hostname, r.port)
+	if info {
+		fmt.Printf("Connecting %s@%s:%d...", r.username, r.hostname, r.port)
+	}
 	sshClient, err := ssh.Dial("tcp", addr, clientConfig)
-	fatalErr(err)
+	fatalErrRemote(r, err)
 	sftpClient, err := sftp.NewClient(sshClient)
-	fatalErr(err)
-	fmt.Println("ok")
+	fatalErrRemote(r, err)
+	if info {
+		fmt.Println("ok")
+	}
 	return sftpClient
 }
