@@ -30,3 +30,17 @@ func showServer() {
 	fmt.Print(table)
 
 }
+
+func delServers(servers []string) {
+	for _, e := range servers {
+		r, err := findServer(e)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		delLinks(findLinks(r.id))
+		deleteLinkByServerID(r.id)
+		deleteServerByID(r.id)
+		fmt.Printf("Successfully removed server %s.\n", r.String())
+	}
+}

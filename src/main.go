@@ -90,7 +90,12 @@ func main() {
 		case "show":
 			showUser()
 		case "rm":
-			fmt.Println("TODO: Delete users.")
+			if len(args) < 1 {
+				fmt.Println("Missing necessary argument: username.")
+				Usage()
+				os.Exit(1)
+			}
+			delUsers(args)
 		default:
 			fmt.Printf("Invalid subcommand: %s.%s.\nExited.\n", command, subcommand)
 			os.Exit(1)
@@ -110,7 +115,12 @@ func main() {
 			}
 			addServer(args[0], *flagPort, *flagPassword, *flagPrivateKey, *flagServerName)
 		case "rm":
-			fmt.Println("TODO: Delete servers.")
+			if len(args) < 1 {
+				fmt.Println("Missing necessary argument: destination.")
+				Usage()
+				os.Exit(1)
+			}
+			delServers(args)
 		case "show":
 			showServer()
 		default:
@@ -132,7 +142,12 @@ func main() {
 			}
 			copyPublicKeys(args[0], *flagPort, args[1:], *flagPassword, *flagPrivateKey)
 		case "rm":
-			fmt.Println("TODO: Delete links.")
+			if len(args) < 1 {
+				fmt.Println("Missing necessary argument.")
+				Usage()
+				os.Exit(1)
+			}
+			delLinksByStrings(args)
 		case "show":
 			showLinks()
 		default:

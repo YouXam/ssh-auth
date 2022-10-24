@@ -49,3 +49,12 @@ func showUser() {
 		fmt.Printf("- %s\n", e)
 	}
 }
+
+func delUsers(users []string) {
+	links := make([]Link, 0)
+	for _, e := range users {
+		links = append(links, findLinksByUsername(e)...)
+		deleteUser(e)
+	}
+	delLinks(links)
+}
