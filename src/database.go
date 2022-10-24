@@ -12,6 +12,12 @@ const (
 	dbName       = ".ssh-auth.sqlite"
 )
 
+type Link struct {
+	id       int
+	username string
+	serverID int
+}
+
 var db *sql.DB
 
 func initDatabase() {
@@ -88,6 +94,14 @@ func getUsers() []string {
 	return result
 }
 
+func deleteUser(username string) {
+	stmt, err := db.Prepare(`delete from users where username==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	_, err = stmt.Exec(username)
+	fatalErr(err)
+}
+
 func findUserId(username string) int {
 	stmt, err := db.Prepare(`select * from users where username==?`)
 	fatalErr(err)
@@ -124,21 +138,67 @@ func insertLink(serverId int, username string) bool {
 	return false
 }
 
-func findLinks(serverId int) []string {
+func findLinks(serverId int) []Link {
 	stmt, err := db.Prepare(`select * from links where serverID==?`)
 	fatalErr(err)
 	defer func() { fatalErr(stmt.Close()) }()
 	rows, err := stmt.Query(serverId)
 	fatalErr(err)
 	defer func() { fatalErr(rows.Close()) }()
-	result := make([]string, 0)
+	result := make([]Link, 0)
 	for rows.Next() {
 		var username string
 		var id, serverID int
 		fatalErr(rows.Scan(&id, &username, &serverID))
-		result = append(result, username)
+		result = append(result, Link{
+			id,
+			username,
+			serverID,
+		})
 	}
 	return result
+}
+
+func findLinksByUsername(username string) []Link {
+	stmt, err := db.Prepare(`select * from links where username==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	rows, err := stmt.Query(username)
+	fatalErr(err)
+	defer func() { fatalErr(rows.Close()) }()
+	result := make([]Link, 0)
+	for rows.Next() {
+		var username string
+		var id, serverID int
+		fatalErr(rows.Scan(&id, &username, &serverID))
+		result = append(result, Link{
+			id,
+			username,
+			serverID,
+		})
+	}
+	return result
+}
+
+func findLinkById(id int) Link {
+	stmt, err := db.Prepare(`select * from links where id==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	rows, err := stmt.Query(id)
+	fatalErr(err)
+	defer func() { fatalErr(rows.Close()) }()
+	if rows.Next() {
+		var username string
+		var id, serverID int
+		fatalErr(rows.Scan(&id, &username, &serverID))
+		return Link{
+			id:       id,
+			username: username,
+			serverID: serverID,
+		}
+	}
+	fatalErr(fmt.Errorf("can not find link #%d", id))
+	return Link{}
 }
 
 func getLinks() map[string][]Remote {
@@ -162,6 +222,22 @@ func getLinks() map[string][]Remote {
 		})
 	}
 	return result
+}
+
+func deleteLinkById(id int) {
+	stmt, err := db.Prepare(`delete from links where id==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	_, err = stmt.Exec(id)
+	fatalErr(err)
+}
+
+func deleteLinkByServerID(id int) {
+	stmt, err := db.Prepare(`delete from links where serverID==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	_, err = stmt.Exec(id)
+	fatalErr(err)
 }
 
 func findServerByName(servername string) (Remote, error) {
@@ -188,9 +264,42 @@ func findServerByName(servername string) (Remote, error) {
 	return Remote{}, fmt.Errorf("can not find server %s", servername)
 }
 
+func findServerById(id int) Remote {
+	stmt, err := db.Prepare(`select * from servers where id==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	rows, err := stmt.Query(id)
+	fatalErr(err)
+	defer func() { fatalErr(rows.Close()) }()
+	if rows.Next() {
+		var name, hostname, username, password, privateKey string
+		var port, id int
+		fatalErr(rows.Scan(&id, &name, &hostname, &username, &port, &password, &privateKey))
+		return Remote{
+			username,
+			hostname,
+			port,
+			password,
+			privateKey,
+			name,
+			id,
+		}
+	}
+	fatalErr(fmt.Errorf("can not find server #%d", id))
+	return Remote{}
+}
+
+func deleteServerByID(id int) {
+	stmt, err := db.Prepare(`delete from servers where id==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	_, err = stmt.Exec(id)
+	fatalErr(err)
+}
+
 func insertServer(hostname string, port int, username string, servername string, password string, key string) bool {
 	pre, err := findServerByName(servername)
-	if err == nil && (pre.hostname != hostname || pre.username != username || pre.password != password) {
+	if err == nil && (pre.hostname != hostname || pre.username != username || pre.port != port) {
 		fatalErr(fmt.Errorf("server %s has already exists", hostname))
 	}
 	stmt, err := db.Prepare(`select * from servers where hostname==? and username==? and port==?`)
@@ -310,17 +419,46 @@ func findPublicKeys(username string) []string {
 	return result
 }
 
-func fatalErr(e error) {
-	if e != nil {
-		fmt.Println(e)
-		fmt.Println("Exited.")
-		os.Exit(1)
+func relatedPublicKey(link Link) []string {
+	stmt, err := db.Prepare(`select publicKey from links, publicKeys, servers where publicKeys.username==links.username and servers.id==links.serverID and servers.id == ? and links.username==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	rows, err := stmt.Query(link.serverID, link.username)
+	fatalErr(err)
+	defer func() { fatalErr(rows.Close()) }()
+	result := make([]string, 0)
+	for rows.Next() {
+		var publicKeys string
+		fatalErr(rows.Scan(&publicKeys))
+		result = append(result, publicKeys)
 	}
+	return result
+}
+
+func ifRemovePublicKey(link Link, publicKey string) bool {
+	stmt, err := db.Prepare(`select * from publicKeys, links where publicKeys.username == links.username and publicKeys.username!=? and serverID==? and publicKey==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	rows, err := stmt.Query(link.username, link.serverID, publicKey)
+	fatalErr(err)
+	defer func() { fatalErr(rows.Close()) }()
+	if rows.Next() {
+		return false
+	}
+	return true
 }
 
 func fatalErrRemote(r Remote, e error) {
 	if e != nil {
 		fmt.Printf("%v: %v\n", r, e)
+		fmt.Println("Exited.")
+		os.Exit(1)
+	}
+}
+
+func fatalErr(e error) {
+	if e != nil {
+		fmt.Println(e)
 		fmt.Println("Exited.")
 		os.Exit(1)
 	}

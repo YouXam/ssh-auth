@@ -129,7 +129,7 @@ ssh-auth auth show
 ssh-auth auth rm id [id2 [id3 ...]]]
 ```
 
-**id, id2, id3**: 授权 id。
+**id, id2, id3**: 授权 id，可通过 `ssh-auth auth show` 查看。
 
 ### 根据保存的成员和服务器关系重新同步公钥
 
