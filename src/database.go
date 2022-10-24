@@ -70,6 +70,40 @@ func insertUser(username string) bool {
 	}
 	return false
 }
+
+func getUsers() []string {
+	stmt, err := db.Prepare(`select * from users`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	rows, err := stmt.Query()
+	fatalErr(err)
+	defer func() { fatalErr(rows.Close()) }()
+	result := make([]string, 0)
+	for rows.Next() {
+		var username string
+		var id int
+		fatalErr(rows.Scan(&id, &username))
+		result = append(result, username)
+	}
+	return result
+}
+
+func findUserId(username string) int {
+	stmt, err := db.Prepare(`select * from users where username==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	rows, err := stmt.Query(username)
+	fatalErr(err)
+	defer func() { fatalErr(rows.Close()) }()
+	if rows.Next() {
+		var name string
+		var uid int
+		fatalErr(rows.Scan(&uid, &name))
+		return uid
+	}
+	return -1
+}
+
 func insertLink(serverId int, username string) bool {
 	// check weather the link has already exists
 	stmt, err := db.Prepare(`select * from links where username==? and serverID=?`)
@@ -103,6 +137,29 @@ func findLinks(serverId int) []string {
 		var id, serverID int
 		fatalErr(rows.Scan(&id, &username, &serverID))
 		result = append(result, username)
+	}
+	return result
+}
+
+func getLinks() map[string][]Remote {
+	stmt, err := db.Prepare(`select links.id, links.username, servers.name, servers.username, servers.hostname, servers.port from links, servers where links.serverID==servers.id`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	rows, err := stmt.Query()
+	fatalErr(err)
+	defer func() { fatalErr(rows.Close()) }()
+	result := map[string][]Remote{}
+	for rows.Next() {
+		var linkUsername, serverName, serverUsername, hostname string
+		var id, port int
+		fatalErr(rows.Scan(&id, &linkUsername, &serverName, &serverUsername, &hostname, &port))
+		result[linkUsername] = append(result[linkUsername], Remote{
+			username:   serverUsername,
+			hostname:   hostname,
+			port:       port,
+			servername: serverName,
+			id:         id,
+		})
 	}
 	return result
 }
@@ -188,62 +245,6 @@ func findServer(destination string) (Remote, error) {
 	return Remote{}, fmt.Errorf("can not find server %s", destination)
 }
 
-func insertPublicKeys(username string, key string) bool {
-	stmt, err := db.Prepare(`select * from publicKeys where publicKey==?`)
-	fatalErr(err)
-	defer func() { fatalErr(stmt.Close()) }()
-	rows, err := stmt.Query(key)
-	fatalErr(err)
-	exists := rows.Next()
-	fatalErr(rows.Close())
-	if !exists {
-		if findUserId(username) < 0 {
-			fmt.Printf("Can't find user %s.\nExited.\n", username)
-			os.Exit(1)
-		}
-		stmt2, err := db.Prepare(`insert into publicKeys (username, publicKey) values(?, ?)`)
-		fatalErr(err)
-		defer func() { fatalErr(stmt2.Close()) }()
-		_, err = stmt2.Exec(username, key)
-		fatalErr(err)
-		return true
-	}
-	return false
-}
-
-func findUserId(username string) int {
-	stmt, err := db.Prepare(`select * from users where username==?`)
-	fatalErr(err)
-	defer func() { fatalErr(stmt.Close()) }()
-	rows, err := stmt.Query(username)
-	fatalErr(err)
-	defer func() { fatalErr(rows.Close()) }()
-	if rows.Next() {
-		var name string
-		var uid int
-		fatalErr(rows.Scan(&uid, &name))
-		return uid
-	}
-	return -1
-}
-
-func getUsers() []string {
-	stmt, err := db.Prepare(`select * from users`)
-	fatalErr(err)
-	defer func() { fatalErr(stmt.Close()) }()
-	rows, err := stmt.Query()
-	fatalErr(err)
-	defer func() { fatalErr(rows.Close()) }()
-	result := make([]string, 0)
-	for rows.Next() {
-		var username string
-		var id int
-		fatalErr(rows.Scan(&id, &username))
-		result = append(result, username)
-	}
-	return result
-}
-
 func getServers() []Remote {
 	stmt, err := db.Prepare(`select * from servers`)
 	fatalErr(err)
@@ -267,6 +268,29 @@ func getServers() []Remote {
 		})
 	}
 	return result
+}
+
+func insertPublicKeys(username string, key string) bool {
+	stmt, err := db.Prepare(`select * from publicKeys where publicKey==? and username==?`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	rows, err := stmt.Query(key, username)
+	fatalErr(err)
+	exists := rows.Next()
+	fatalErr(rows.Close())
+	if !exists {
+		if findUserId(username) < 0 {
+			fmt.Printf("Can't find user %s.\nExited.\n", username)
+			os.Exit(1)
+		}
+		stmt2, err := db.Prepare(`insert into publicKeys (username, publicKey) values(?, ?)`)
+		fatalErr(err)
+		defer func() { fatalErr(stmt2.Close()) }()
+		_, err = stmt2.Exec(username, key)
+		fatalErr(err)
+		return true
+	}
+	return false
 }
 
 func findPublicKeys(username string) []string {
@@ -296,7 +320,7 @@ func fatalErr(e error) {
 
 func fatalErrRemote(r Remote, e error) {
 	if e != nil {
-		fmt.Printf("%s: %v\n", r.toString(), e)
+		fmt.Printf("%v: %v\n", r, e)
 		fmt.Println("Exited.")
 		os.Exit(1)
 	}

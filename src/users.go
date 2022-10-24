@@ -34,11 +34,18 @@ func addUser(name string, path []string) {
 	if length-failed-duplicated == 1 {
 		fmt.Printf("Successfully added 1 key.\n")
 	} else if length-failed-duplicated > 1 {
-		fmt.Printf("Successfully added %d keys.\n", length)
+		fmt.Printf("Successfully added %d keys.\n", length-failed-duplicated)
 	}
 	if duplicated == 1 {
-		fmt.Printf("%d key has already been added.\n", failed)
+		fmt.Printf("%d key has already been added.\n", duplicated)
 	} else if duplicated > 1 {
-		fmt.Printf("%d keys have already been added.\n", failed)
+		fmt.Printf("%d keys have already been added.\n", duplicated)
+	}
+}
+
+func showUser() {
+	users := getUsers()
+	for _, e := range users {
+		fmt.Printf("- %s\n", e)
 	}
 }

@@ -23,7 +23,7 @@ type Remote struct {
 	id         int
 }
 
-func (t Remote) toString() string {
+func (t Remote) String() string {
 	if t.servername != "" {
 		return t.servername + "(" + t.username + "@" + t.hostname + ":" + strconv.Itoa(t.port) + ")"
 	}

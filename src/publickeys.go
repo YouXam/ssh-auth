@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/liushuochen/gotable"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -62,15 +64,16 @@ func copyPublicKeysWithRemote(r Remote, name []string, info bool) {
 			}
 		}
 		if succeed <= 1 {
-			fmt.Printf("Successfully linked %d user and server %s.\n", succeed, r.toString())
+			fmt.Printf("Successfully authorized user %s to log in server %v.\n", name[0], r)
 		} else {
-			fmt.Printf("Successfully linked %d users and server %s.\n", succeed, r.toString())
+			fmt.Printf("Successfully authorized %d users to log in server %v.\n", succeed, r)
+
 		}
 	} else {
 		if cnt <= 1 {
-			fmt.Printf("Successfully copied %d key to %s.\n", cnt, r.toString())
+			fmt.Printf("Successfully copied %d key to %v.\n", cnt, r)
 		} else {
-			fmt.Printf("Successfully copied %d keys to %s.\n", cnt, r.toString())
+			fmt.Printf("Successfully copied %d keys to %v.\n", cnt, r)
 		}
 	}
 }
@@ -127,4 +130,16 @@ func syncPublicKeys(serversName []string) {
 	} else {
 		fmt.Printf("Successfully synchronized %d servers.\n", cnt2)
 	}
+}
+
+func showLinks() {
+	table, _ := gotable.Create("ID", "User", "Server")
+	links := getLinks()
+	for k, v := range links {
+		for _, e := range v {
+			table.AddRow([]string{strconv.Itoa(e.id), k, e.String()})
+		}
+	}
+
+	fmt.Print(table)
 }

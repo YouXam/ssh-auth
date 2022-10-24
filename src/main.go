@@ -24,19 +24,31 @@ SYNOPSIS
 	ssh-auth --help
 	ssh-auth <command> [<args>]
 COMMANDS
-	ssh-auth user <name> [path [path2 [path3 ...]]]
+	ssh-auth user add <name> [path [path2 [path3 ...]]]
 		Import public keys, and add user when user is not exists.
-	ssh-auth server [-p port] [-P] [-i path] [-n name] [user@]hostname
+	ssh-auth user show
+		Display all users
+	ssh-auth user rm name [name2 [name3 ...]]]
+		Remove user.
+	ssh-auth server add [-p port] [-P] [-i path] [-n name] [user@]hostname
 		Add server.
 			-p: server port, default value is 22.
 			-P: use password to connect server, it will be saved in clear text.
 			-i: private key to connect server, it will be saved in clear text.
 			-n: name of server.
-	ssh-auth copy [-p port] [-P] [-i path] <user> [user2 [user3 ...]] <servername|[username@]hostname> 
-		Copy public keys to remote machine.
+	ssh-auth server show
+		Display all servers.
+	ssh-auth server rm <servername|[username@]hostname> [servername|[username@]hostname] ...
+		Remove server.
+	ssh-auth auth add [-p port] [-P] [-i path] <servername|[username@]hostname> <user> [user2 [user3 ...]]
+		Add authorization, and copy public keys to remote machine.
 			-p: server port, default value is 22.
 			-P: use password to connect server, it will not be saved.
 			-i: private key to connect server, it will not be saved.
+	ssh-auth auth show
+		Display all authorization.
+	ssh-auth auth rm id [id2 [id3 ...]]]
+		Remove authorization.
 	ssh-auth sync [servername|[username@]hostname] [servername|[username@]hostname] ...
 		Synchronize the public key of specified servers or all servers.`)
 }
@@ -60,34 +72,77 @@ func main() {
 	}
 	command := os.Args[1]
 	os.Args = os.Args[1:]
-	// parse args again to skip subcommand
-	flag.Parse()
-	args := flag.Args()
 	switch command {
 	case "user":
-		if len(args) < 1 {
-			fmt.Println("Missing necessary argument: name.")
-			Usage()
+		subcommand := os.Args[1]
+		os.Args = os.Args[1:]
+		// parse args again to skip subcommand
+		flag.Parse()
+		args := flag.Args()
+		switch subcommand {
+		case "add":
+			if len(args) < 1 {
+				fmt.Println("Missing necessary argument: name.")
+				Usage()
+				os.Exit(1)
+			}
+			addUser(args[0], args[1:])
+		case "show":
+			showUser()
+		case "rm":
+			fmt.Println("TODO: Delete users.")
+		default:
+			fmt.Printf("Invalid subcommand: %s.%s.\nExited.\n", command, subcommand)
 			os.Exit(1)
 		}
-		addUser(args[0], args[1:])
 	case "server":
-		if len(args) < 1 {
-			fmt.Println("Missing necessary argument: destination.")
-			Usage()
+		subcommand := os.Args[1]
+		os.Args = os.Args[1:]
+		// parse args again to skip subcommand
+		flag.Parse()
+		args := flag.Args()
+		switch subcommand {
+		case "add":
+			if len(args) < 1 {
+				fmt.Println("Missing necessary argument: destination.")
+				Usage()
+				os.Exit(1)
+			}
+			addServer(args[0], *flagPort, *flagPassword, *flagPrivateKey, *flagServerName)
+		case "rm":
+			fmt.Println("TODO: Delete servers.")
+		case "show":
+			showServer()
+		default:
+			fmt.Printf("Invalid subcommand: %s.%s.\nExited.\n", command, subcommand)
 			os.Exit(1)
 		}
-		addServer(args[0], *flagPort, *flagPassword, *flagPrivateKey, *flagServerName)
-	case "copy":
-		if len(args) < 2 {
-			fmt.Println("Missing necessary argument.")
-			Usage()
+	case "auth":
+		subcommand := os.Args[1]
+		os.Args = os.Args[1:]
+		// parse args again to skip subcommand
+		flag.Parse()
+		args := flag.Args()
+		switch subcommand {
+		case "add":
+			if len(args) < 2 {
+				fmt.Println("Missing necessary argument.")
+				Usage()
+				os.Exit(1)
+			}
+			copyPublicKeys(args[0], *flagPort, args[1:], *flagPassword, *flagPrivateKey)
+		case "rm":
+			fmt.Println("TODO: Delete links.")
+		case "show":
+			showLinks()
+		default:
+			fmt.Printf("Invalid subcommand: %s.%s.\nExited.\n", command, subcommand)
 			os.Exit(1)
 		}
-		copyPublicKeys(args[len(args)-1], *flagPort, args[:len(args)-1], *flagPassword, *flagPrivateKey)
 	case "sync":
-		syncPublicKeys(args)
+		flag.Parse()
+		syncPublicKeys(flag.Args())
 	default:
-		fmt.Println("Invalid subcommand.")
+		fmt.Printf("Invalid subcommand: %s.\n", command)
 	}
 }

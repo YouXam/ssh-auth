@@ -35,17 +35,31 @@ ssh-auth <command> [<args>]
 ### 添加成员/导入公钥
 
 ```shell
-ssh-auth user <name> [path [path2 [path3 ...]]]
+ssh-auth user add name [path [path2 [path3 ...]]]
 ```
 
 **name**: 成员名
 
 **path, path2, path3, ...**: 公钥路径
 
+### 显示所有成员
+
+```shell
+ssh-auth user show
+```
+
+### 删除成员
+
+```shell
+ssh-auth user rm name [name2 [name3 ...]]]
+```
+
+**name, name2, name3, ...**: 成员名
+
 ### 添加服务器
 
 ```shell
-ssh-auth server [-p port] [-P] [-i path] [-n name] [user@]hostname
+ssh-auth server add [-p port] [-P] [-i path] [-n name] [user@]hostname
 ```
 
 **-p**: 服务器端口，默认为 22
@@ -60,21 +74,17 @@ ssh-auth server [-p port] [-P] [-i path] [-n name] [user@]hostname
 
 **hostname**: 主机名或 IP 地址
 
-### 添加指定成员的所有公钥到指定服务器
+### 显示所有服务器
 
 ```shell
-ssh-auth copy [-p port] [-P] [-i path] <user> [user2 [user3 ...]] <servername|[username@]hostname> 
+ssh-auth server show
 ```
 
-成员和服务器关系将会保存。
+### 删除服务器
 
-**-p**: 服务器端口，默认为 22
-
-**-P**: 使用密码连接服务器，覆盖已保存设置，密码将**不会**保存
-
-**-i path**: 使用私钥，path 为私钥路径，覆盖已保存设置，私钥将**不会**保存
-
-**user, user2, user3, ...**: 成员名
+```shell
+ssh-auth server rm <servername|[username@]hostname> [servername|[username@]hostname] ...
+```
 
 **servername** 服务器别名
 
@@ -82,10 +92,55 @@ ssh-auth copy [-p port] [-P] [-i path] <user> [user2 [user3 ...]] <servername|[u
 
 **hostname**: 主机名或 IP 地址
 
+
+### 授权成员登录服务器
+
+将会上传该成员的所有公钥到该服务器，成员和服务器关系将会保存。
+
+```shell
+ssh-auth auth add [-p port] [-P] [-i path] <servername|[username@]hostname> <user> [user2 [user3 ...]]
+```
+
+**-p**: 服务器端口，默认为 22
+
+**-P**: 使用密码连接服务器，覆盖已保存设置，密码将**不会**保存
+
+**-i path**: 使用私钥，path 为私钥路径，覆盖已保存设置，私钥将**不会**保存
+
+**servername** 服务器别名
+
+**username**: 服务器用户名，默认为当前用户名
+
+**hostname**: 主机名或 IP 地址
+
+**user, user2, user3, ...**: 成员名
+
+### 显示所有授权
+
+```shell
+ssh-auth auth show
+```
+
+### 删除某授权
+
+当且仅当某服务器的某个公钥没有任何成员在使用时，会尝试连接服务器并删除该公钥。
+
+```shell
+ssh-auth auth rm id [id2 [id3 ...]]]
+```
+
+**id, id2, id3**: 授权 id。
+
 ### 根据保存的成员和服务器关系重新同步公钥
 
 ```shell
 ssh-auth sync [servername|[username@]hostname] [servername|[username@]hostname] ...
 ```
 
-当不提供服务器列表是，默认重新同步所有服务器的公钥。
+当不提供服务器列表时，默认重新同步所有服务器的公钥。
+
+**servername** 服务器别名
+
+**username**: 服务器用户名，默认为当前用户名
+
+**hostname**: 主机名或 IP 地址
