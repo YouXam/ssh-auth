@@ -80,6 +80,25 @@ ssh-auth server add [-p port] [-P] [-i path] [-n name] [user@]hostname
 ssh-auth server show
 ```
 
+### 编辑服务器
+
+```shell
+ssh-auth server edit [-p port] [-P] [-i path] [-n newName] <servername|[username@]hostname>
+
+```
+
+**-p**: 服务器端口，默认为 22
+
+**-P**: 使用密码，密码将会**明文**保存
+
+**-i path**: 使用私钥，path 为私钥路径，私钥将会**明文**保存
+
+**-n name**: 给服务器设置别名
+
+**user**: 服务器用户名，默认为当前用户名
+
+**hostname**: 主机名或 IP 地址
+
 ### 删除服务器
 
 ```shell

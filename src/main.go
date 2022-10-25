@@ -36,6 +36,12 @@ COMMANDS
 			-P: use password to connect server, it will be saved in clear text.
 			-i: private key to connect server, it will be saved in clear text.
 			-n: name of server.
+	ssh-auth server edit [-p port] [-P] [-i path] [-n newName] <servername|[username@]hostname>
+		Edit server.
+			-p: server port, default value is 22.
+			-P: use password to connect server, it will be saved in clear text.
+			-i: private key to connect server, it will be saved in clear text.
+			-n: name of server.
 	ssh-auth server show
 		Display all servers.
 	ssh-auth server rm <servername|[username@]hostname> [servername|[username@]hostname] ...
@@ -123,6 +129,13 @@ func main() {
 			delServers(args)
 		case "show":
 			showServer()
+		case "edit":
+			if len(args) < 1 {
+				fmt.Println("Missing necessary argument: destination.")
+				Usage()
+				os.Exit(1)
+			}
+			editServer(args[0], *flagPort, *flagPassword, *flagPrivateKey, *flagServerName)
 		default:
 			fmt.Printf("Invalid subcommand: %s.%s.\nExited.\n", command, subcommand)
 			os.Exit(1)
