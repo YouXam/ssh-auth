@@ -17,6 +17,23 @@ func addServer(destination string, port int, usePassword bool, publicKeyPath str
 	}
 }
 
+func editServer(destination string, port int, usePassword bool, publicKeyPath string, serverName string) {
+	r, err := findServer(destination)
+	fatalErr(err)
+	if port > 0 && r.port != port {
+		r.port = port
+	}
+	if usePassword && r.password == "" || publicKeyPath != "" {
+		r = parseRemote(r.port, r.username+"@"+r.hostname, usePassword, publicKeyPath)
+	}
+	if serverName != "" && r.servername != serverName {
+		r.servername = serverName
+	}
+	fmt.Println("Testing ssh connection...")
+	connect(r, true)
+	insertServer(r.hostname, r.port, r.username, serverName, r.password, r.privateKey)
+}
+
 func showServer() {
 	servers := getServers()
 	table, _ := gotable.Create("ID", "Name", "Address", "Type")
