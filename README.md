@@ -4,6 +4,8 @@
 
 ## 开始
 
+**你可以在[这里](https://git.byr.moe/YouXam/ssh-auth/-/releases)下载**
+
 **编译**
 
 ```shell
