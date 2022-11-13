@@ -61,8 +61,8 @@ COMMANDS
 
 func main() {
 	initDatabase()
-
 	flag.Parse()
+
 	if *flagVersion {
 		fmt.Println(VERSION)
 		return
