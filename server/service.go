@@ -6,4 +6,7 @@ After=network.target
 ConditionPathExists=/usr/local/bin/ssh-auth-server
 
 [Service]
-ExecStart=/usr/local/bin/ssh-auth-server`
+ExecStart=/usr/local/bin/ssh-auth-server
+
+[Install]
+WantedBy=multi-user.target`

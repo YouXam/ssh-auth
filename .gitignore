@@ -1,2 +1,3 @@
 .idea
 ssh-auth
+server/client_public.key
