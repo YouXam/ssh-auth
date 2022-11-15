@@ -8,8 +8,11 @@ import (
 )
 
 var (
-	flagInstall = flag.Bool("install", false, "Install service")
-	flagAdd     = flag.Bool("add", false, "Add user")
+	flagInstall   = flag.Bool("install", false, "Install service")
+	flagUninstall = flag.Bool("uninstall", false, "Uninstall service")
+	flagAdd       = flag.Bool("add", false, "Add user")
+	flagClientKey = flag.String("client-key", "", "Client public key")
+	flagHash      = flag.String("hash", "", "Client public key hash")
 )
 
 func runCommnd(info string, command string, args ...string) {
@@ -37,10 +40,39 @@ func main() {
 			log.Println("Failed to delete service file:", err)
 		}
 		runCommnd("reload daemon", "sudo", "systemctl", "daemon-reload")
-		runCommnd("enable service", "sudo", "systemctl", "enable", "ssh-auth.service")
-		runCommnd("start service", "sudo", "systemctl", "start", "ssh-auth.service")
-	}
-	for {
-
+		runCommnd("enable service", "sudo", "systemctl", "enable", "ssh-auth-server.service")
+		runCommnd("start service", "sudo", "systemctl", "start", "ssh-auth-server.service")
+	} else if *flagUninstall {
+		runCommnd("stop service", "sudo", "systemctl", "stop", "ssh-auth-server.service")
+		runCommnd("disable service", "sudo", "systemctl", "disable", "ssh-auth-server.service")
+		runCommnd("remove service file", "sudo", "rm", "/usr/lib/systemd/system/ssh-auth-server.service")
+		runCommnd("remove binary", "sudo", "rm", "/usr/local/bin/ssh-auth-server")
+	} else {
+		initDatabase()
+		if *flagAdd {
+			if *flagClientKey == "" {
+				log.Fatalln("Missing client public key")
+			}
+			if *flagHash == "" {
+				log.Fatalln("Missing client UUID")
+			}
+			clientKey, err := os.ReadFile(*flagClientKey)
+			if err != nil {
+				log.Fatalln("Failed to read client public key:", err)
+			}
+			err = insertClientPublicKey(*flagHash, string(clientKey))
+			fatalErr(err)
+		} else {
+			go watch()
+			server()
+			// sign := make(chan os.Signal)
+			// signal.Notify(sign)
+			// for {
+			// 	if <-sign == os.Interrupt {
+			// 		fmt.Println("Interrupted")
+			// 		break
+			// 	}
+			// }
+		}
 	}
 }
