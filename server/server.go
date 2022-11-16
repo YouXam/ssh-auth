@@ -149,6 +149,34 @@ func server() {
 	http.HandleFunc("/del", func(w http.ResponseWriter, r *http.Request) {
 		HandleFunc(w, r, "del")
 	})
+
+	http.HandleFunc("/client", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			// Only for localhost
+			if !(strings.HasPrefix(r.RemoteAddr, "[::1]") || strings.HasPrefix(r.RemoteAddr, "localhost") || strings.HasPrefix(r.RemoteAddr, "127.0.0.1")) {
+				httpRequestFailed("Error(remote address)", nil, w, r)
+				return
+			}
+			// Parse the request body
+			var data ClientData
+			err := json.NewDecoder(r.Body).Decode(&data)
+			if err != nil {
+				httpRequestFailed("Error(parse request body)", err, w, r)
+				return
+			}
+			if data.Hash == "" || data.PublicKey == "" {
+				httpRequestFailed("Error(hash or publicKey is empty)", nil, w, r)
+				return
+			}
+			insertClientPublicKey(data.Hash, data.PublicKey)
+			res := OperatorResult{
+				Success: true,
+				Message: "success",
+			}
+			json.NewEncoder(w).Encode(res)
+			printLog("Success(client):"+data.Hash, nil, r)
+		}
+	})
 	log.Println("Server started at :22222")
 	log.Fatal(http.ListenAndServe(":22222", nil))
 }
