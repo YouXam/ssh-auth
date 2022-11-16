@@ -62,6 +62,7 @@ func insertClientPublicKey(hash string, publicKey string) error {
 	rows.Close()
 	username := os.Getenv("USER")
 	insertUsername(username)
+	watcher.Add(getAuthorizedKeysPath(username))
 	_, err = db.Exec("insert into clientPublicKeys (hash, username, publicKey) values (?, ?, ?)", hash, username, publicKey)
 	return err
 }

@@ -25,8 +25,14 @@ func updateAuthorizedKeys(username string) {
 	path := getAuthorizedKeysPath(username)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		log.Println(err)
-		return
+		// if the file does not exist, create it
+		if os.IsNotExist(err) {
+			log.Println("Create:", path)
+			data = []byte("")
+		} else {
+			log.Println(err)
+			return
+		}
 	}
 	publicKeys, err := getSSHPublicKeysByUsername(username)
 	publicKeysMap := make(map[string]bool)
@@ -56,6 +62,7 @@ func updateAuthorizedKeys(username string) {
 		if err != nil {
 			log.Println(err)
 		}
+		log.Println("Update:", path)
 	}
 }
 
@@ -79,39 +86,31 @@ func watch() {
 			log.Println("Watching", path)
 		}
 	}
-	go func() {
-		// every 10 minutes, check if there are new username.
-		time.Sleep(10 * time.Minute)
-		usernames := getUsernames()
-		for _, username := range usernames {
-			path := getAuthorizedKeysPath(username)
-			if _, ok := fileMap[path]; !ok {
-				err = watcher.Add(path)
-				if err != nil {
-					log.Println(err)
-				} else {
-					fileMap[path] = true
-				}
-			}
-		}
-	}()
 	log.Println("Start watching authorized_keys files")
+	timeTags := make(map[string]int64)
+	filesOp := make(map[string]fsnotify.Op)
 	for {
 		select {
 		case ev := <-watcher.Events:
 			{
-				log.Printf("%s %v, try to update it\n", ev.Name, ev.Op)
-				username := getUsernameFromPath(ev.Name)
-				updateAuthorizedKeys(username)
-				watcheList := watcher.WatchList()
-				flag := false
-				for _, path := range watcheList {
-					if path == ev.Name {
-						flag = true
+				if _, ok := fileMap[ev.Name]; ok {
+					// Delay 200ms to wait for the file to be written
+					var timeTag int64
+					if t, ok := timeTags[ev.Name]; ok {
+						timeTag = t
 					}
-				}
-				if !flag {
-					watcher.Add(ev.Name)
+					filesOp[ev.Name] = ev.Op
+					if time.Duration(time.Now().UnixMilli()-timeTag) > 200*time.Millisecond {
+						timeTags[ev.Name] = time.Now().UnixMilli()
+						go func() {
+							time.Sleep(200 * time.Millisecond)
+							log.Printf("File modified[%v]: %s", filesOp[ev.Name], ev.Name)
+							username := getUsernameFromPath(ev.Name)
+							updateAuthorizedKeys(username)
+							watcher.Add(ev.Name)
+							timeTags[ev.Name] = 0
+						}()
+					}
 				}
 			}
 		case err := <-watcher.Errors:

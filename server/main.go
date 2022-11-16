@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 var (
@@ -24,6 +28,28 @@ func runCommnd(info string, command string, args ...string) {
 	if err != nil {
 		log.Fatalln("Failed to run command:", err)
 	}
+}
+
+func httpAdd(clientKey []byte) error {
+	data := ClientData{
+		Hash:      *flagHash,
+		PublicKey: string(clientKey),
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	resp, err := http.Post("http://localhost:22222/client", "application/json", strings.NewReader(string(jsonData)))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	respText, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	log.Println(strings.TrimSpace(string(respText)))
+	return nil
 }
 
 func main() {
@@ -60,8 +86,15 @@ func main() {
 			if err != nil {
 				log.Fatalln("Failed to read client public key:", err)
 			}
-			err = insertClientPublicKey(*flagHash, string(clientKey))
-			fatalErr(err)
+			err = httpAdd(clientKey)
+			if err != nil {
+				log.Println("Server not running, adding to database directly")
+				err = insertClientPublicKey(*flagHash, string(clientKey))
+				if err != nil {
+					log.Fatalln("Failed to insert client public key:", err)
+				}
+			}
+			log.Println("Client public key added")
 		} else {
 			go watch()
 			server()
