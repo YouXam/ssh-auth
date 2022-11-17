@@ -40,7 +40,7 @@ func updateAuthorizedKeys(username string) {
 		log.Println(err)
 		return
 	}
-	// Splitlines and check if the publicKey is already in the file
+	// Split lines and check if the publicKey is already in the file
 	linesB := strings.Split(string(data), "\n")
 	lines := make([]string, 0)
 	for _, line := range linesB {
@@ -66,6 +66,8 @@ func updateAuthorizedKeys(username string) {
 	}
 }
 
+var fileMap = make(map[string]bool)
+
 func watch() {
 	var err error
 	watcher, err = fsnotify.NewWatcher()
@@ -74,7 +76,6 @@ func watch() {
 	}
 	defer watcher.Close()
 	usernames := getUsernames()
-	fileMap := make(map[string]bool)
 	for _, username := range usernames {
 		updateAuthorizedKeys(username)
 		path := getAuthorizedKeysPath(username)

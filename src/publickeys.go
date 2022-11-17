@@ -118,7 +118,17 @@ func readRemote(sftpClient *sftp.Client, r Remote) string {
 		remotePath = "/root/.ssh/authorized_keys"
 	}
 	srcFile, err := sftpClient.Open(remotePath)
-	fatalErr(err)
+	// if not exist, create it
+	if err != nil {
+		basePath := "/home/" + r.username + "/.ssh"
+		if r.username == "root" {
+			basePath = "/root/.ssh"
+		}
+		err := sftpClient.Mkdir(basePath)
+		fatalErr(err)
+		srcFile, err = sftpClient.Create(remotePath)
+		fatalErr(err)
+	}
 	defer func() { fatalErr(srcFile.Close()) }()
 	// readRemote remote file and check
 	data, err := io.ReadAll(srcFile)

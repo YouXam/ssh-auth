@@ -332,9 +332,11 @@ func deleteServerByID(id int) {
 }
 
 func insertServer(hostname string, port int, username string, servername string, password string, key string, isInstalled int) bool {
-	_, err := findServerByName(servername)
-	//if err == nil && (pre.hostname == hostname || pre.username == username || pre.port == port) {
-	if err == nil {
+	pre, err := findServerByName(servername)
+	if err == nil && (pre.hostname == hostname && pre.username == username && pre.port == port) {
+		return false
+	}
+	if err == nil && (pre.hostname != hostname || pre.username != username || pre.port != port) {
 		fatalErr(fmt.Errorf("server %v has already exists", servername))
 	}
 	stmt, err := db.Prepare(`select * from servers where hostname==? and username==? and port==?`)
