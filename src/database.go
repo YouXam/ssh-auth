@@ -3,12 +3,12 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	"os"
 )
 
 const (
-	dbDriverName = "sqlite3"
+	dbDriverName = "sqlite"
 	dbName       = ".ssh-auth.sqlite"
 )
 
@@ -40,7 +40,9 @@ func createTable() {
 		"username" text not null,
 		"port" integer not null,
 		"password" text not null,
-		"privateKey" text not null
+		"privateKey" text not null,
+		"installedDaemon" int not null,
+		"serverPublicKey" text not null
 	)`)
 	fatalErr(err)
 	_, err = db.Exec(`create table if not exists "publicKeys" (
@@ -54,6 +56,36 @@ func createTable() {
 		"username" text not null,
 		"serverID" integer not null
 	)`)
+	fatalErr(err)
+	_, err = db.Exec(`create table if not exists "keyPair"(
+    	"id" integer primary key autoincrement,
+    	"publicKey" text not null,
+    	"privateKey" text not null
+	)`)
+	fatalErr(err)
+}
+
+func getKeyPair() (string, string) {
+	stmt, err := db.Prepare(`select * from keyPair`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	rows, err := stmt.Query()
+	fatalErr(err)
+	defer func() { fatalErr(rows.Close()) }()
+	if rows.Next() {
+		var id int
+		var publicKey, privateKey string
+		fatalErr(rows.Scan(&id, &publicKey, &privateKey))
+		return publicKey, privateKey
+	}
+	return "", ""
+}
+
+func insertKeyPair(privateKey, publicKey string) {
+	stmt, err := db.Prepare(`insert into keyPair (privateKey, publicKey) values(?, ?)`)
+	fatalErr(err)
+	defer func() { fatalErr(stmt.Close()) }()
+	_, err = stmt.Exec(privateKey, publicKey)
 	fatalErr(err)
 }
 
@@ -249,8 +281,8 @@ func findServerByName(servername string) (Remote, error) {
 	defer func() { fatalErr(rows.Close()) }()
 	if rows.Next() {
 		var name, hostname, username, password, privateKey string
-		var port, id int
-		fatalErr(rows.Scan(&id, &name, &hostname, &username, &port, &password, &privateKey))
+		var port, id, installedDaemon int
+		fatalErr(rows.Scan(&id, &name, &hostname, &username, &port, &password, &privateKey, &installedDaemon))
 		return Remote{
 			username,
 			hostname,
@@ -259,6 +291,7 @@ func findServerByName(servername string) (Remote, error) {
 			privateKey,
 			name,
 			id,
+			installedDaemon,
 		}, nil
 	}
 	return Remote{}, fmt.Errorf("can not find server %s", servername)
@@ -273,8 +306,8 @@ func findServerById(id int) Remote {
 	defer func() { fatalErr(rows.Close()) }()
 	if rows.Next() {
 		var name, hostname, username, password, privateKey string
-		var port, id int
-		fatalErr(rows.Scan(&id, &name, &hostname, &username, &port, &password, &privateKey))
+		var port, id, installedDaemon int
+		fatalErr(rows.Scan(&id, &name, &hostname, &username, &port, &password, &privateKey, &installedDaemon))
 		return Remote{
 			username,
 			hostname,
@@ -283,6 +316,7 @@ func findServerById(id int) Remote {
 			privateKey,
 			name,
 			id,
+			installedDaemon,
 		}
 	}
 	fatalErr(fmt.Errorf("can not find server #%d", id))
@@ -339,8 +373,8 @@ func findServer(destination string) (Remote, error) {
 	defer func() { fatalErr(rows.Close()) }()
 	if rows.Next() {
 		var name, hostname, username, password, privateKey string
-		var port, id int
-		fatalErr(rows.Scan(&id, &name, &hostname, &username, &port, &password, &privateKey))
+		var port, id, installedDaemon int
+		fatalErr(rows.Scan(&id, &name, &hostname, &username, &port, &password, &privateKey, &installedDaemon))
 		return Remote{
 			username,
 			hostname,
@@ -349,6 +383,7 @@ func findServer(destination string) (Remote, error) {
 			privateKey,
 			name,
 			id,
+			installedDaemon,
 		}, nil
 	}
 	return Remote{}, fmt.Errorf("can not find server %s", destination)
@@ -364,8 +399,8 @@ func getServers() []Remote {
 	result := make([]Remote, 0)
 	for rows.Next() {
 		var name, hostname, username, password, privateKey string
-		var port, id int
-		fatalErr(rows.Scan(&id, &name, &hostname, &username, &port, &password, &privateKey))
+		var port, id, installedDaemon int
+		fatalErr(rows.Scan(&id, &name, &hostname, &username, &port, &password, &privateKey, &installedDaemon))
 		result = append(result, Remote{
 			username,
 			hostname,
@@ -374,6 +409,7 @@ func getServers() []Remote {
 			privateKey,
 			name,
 			id,
+			installedDaemon,
 		})
 	}
 	return result

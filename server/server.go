@@ -142,6 +142,10 @@ func HandleFunc(w http.ResponseWriter, r *http.Request, operator string) {
 }
 
 func server() {
+	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ssh-auth-server.pong"))
+	})
+
 	http.HandleFunc("/add", func(w http.ResponseWriter, r *http.Request) {
 		HandleFunc(w, r, "add")
 	})

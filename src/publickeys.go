@@ -24,16 +24,19 @@ func read(sftpClient *sftp.Client, r Remote) string {
 	return content
 }
 
-func write(newContent string, sftpClient *sftp.Client, r Remote) {
-	remotePath := "/home/" + r.username + "/.ssh/authorized_keys"
-	if r.username == "root" {
-		remotePath = "/root/.ssh/authorized_keys"
+func getAuthorizedKeysPath(username string) string {
+	if username == "root" {
+		return "/root/.ssh/authorized_keys"
 	}
-	srcFile2, err := sftpClient.Create(remotePath)
+	return "/home/" + username + "/.ssh/authorized_keys"
+}
+
+func writeRemote(sftpClient *sftp.Client, path string, content []byte) {
+	srcFile2, err := sftpClient.Create(path)
 	fatalErr(err)
 	defer func() { fatalErr(srcFile2.Close()) }()
 	// write new content to remote file
-	_, err = srcFile2.Write([]byte(newContent))
+	_, err = srcFile2.Write(content)
 	fatalErr(err)
 }
 
@@ -69,7 +72,7 @@ func copyPublicKeysWithRemote(r Remote, name []string, info bool) {
 		}
 	}
 	newContent := strings.Join(publicKeys, "\n")
-	write(newContent, sftpClient, r)
+	writeRemote(sftpClient, getAuthorizedKeysPath(r.username), []byte(newContent))
 	if info {
 		if cnt <= 1 {
 			fmt.Printf("Successfully copied %d key.\n", cnt)
@@ -212,7 +215,7 @@ func delLinks(ids []Link) {
 			}
 		}
 		newContent := strings.Join(newPublicKeys, "\n")
-		write(newContent, sftpClient, r)
+		writeRemote(sftpClient, getAuthorizedKeysPath(r.username), []byte(newContent))
 		if deleted == 1 {
 			fmt.Printf("Deleted %d key from server %v.\n", deleted, r.String())
 		} else {
