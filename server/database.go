@@ -20,9 +20,9 @@ func initDatabase() {
 	var err error
 	// check if the directory exists
 	if _, err = os.Stat("/var/lib/ssh-auth-server"); os.IsNotExist(err) {
-		runCommnd("mkdir /var/lib/ssh-auth-server", "sudo", "mkdir", "-p", "/var/lib/ssh-auth-server")
+		runCommand("mkdir /var/lib/ssh-auth-server", "sudo", "mkdir", "-p", "/var/lib/ssh-auth-server")
 		// assign permission to everyone
-		runCommnd("chmod 777 /var/lib/ssh-auth-server", "sudo", "chmod", "777", "/var/lib/ssh-auth-server")
+		runCommand("chmod 777 /var/lib/ssh-auth-server", "sudo", "chmod", "777", "/var/lib/ssh-auth-server")
 	}
 	db, err = sql.Open(dbDriverName, "/var/lib/ssh-auth-server/"+dbName)
 	fatalErr(err)
@@ -50,7 +50,7 @@ func createTable() {
 	fatalErr(err)
 }
 
-func insertClientPublicKey(hash string, publicKey string) error {
+func insertClientPublicKey(hash, publicKey, username string) error {
 	rows, err := db.Query("select id from clientPublicKeys where hash = ?", hash)
 	if err != nil {
 		return err
@@ -60,9 +60,7 @@ func insertClientPublicKey(hash string, publicKey string) error {
 		return errors.New("hash already exists")
 	}
 	rows.Close()
-	username := os.Getenv("USER")
 	insertUsername(username)
-	watcher.Add(getAuthorizedKeysPath(username))
 	_, err = db.Exec("insert into clientPublicKeys (hash, username, publicKey) values (?, ?, ?)", hash, username, publicKey)
 	return err
 }
@@ -85,7 +83,8 @@ func getClientPublicKey(hash string) (string, string, error) {
 }
 
 func insertSSHPublicKey(hash string, publicKey string) error {
-	_, err := db.Exec("insert into sshPublicKeys (hash, publicKey) values (?, ?)", hash, publicKey)
+	// insert PublicKey if not exists
+	_, err := db.Exec("insert into sshPublicKeys (hash, publicKey) select ?, ? where not exists (select * from sshPublicKeys where hash = ? and publicKey = ?)", hash, publicKey, hash, publicKey)
 	return err
 }
 

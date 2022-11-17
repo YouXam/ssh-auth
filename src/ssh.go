@@ -2,12 +2,16 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"embed"
 	_ "embed"
+	"encoding/hex"
 	"fmt"
 	"github.com/howeyc/gopass"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"io"
+	"net/http"
 	"os"
 	"os/user"
 	"strconv"
@@ -16,18 +20,33 @@ import (
 )
 
 type Remote struct {
-	username        string
-	hostname        string
-	port            int
-	password        string
-	privateKey      string
-	servername      string
-	id              int
-	installedDaemon int
+	username    string
+	hostname    string
+	port        int
+	password    string
+	privateKey  string
+	servername  string
+	id          int
+	isInstalled int
 }
 
-////go:embed ssh-auth-server
-//var sshAuthServer []byte
+//go:embed bin
+var sshAuthServerBin embed.FS
+
+var archMap = map[string]string{
+	"x86_64":    "amd64",
+	"aarch64":   "arm64",
+	"armv7l":    "arm",
+	"armv6l":    "arm",
+	"armv5tel":  "arm",
+	"armv5tejl": "arm",
+	"armv4tl":   "arm",
+	"armv4t":    "arm",
+	"i686":      "386",
+	"i386":      "386",
+	"i586":      "386",
+	"i486":      "386",
+}
 
 func (t Remote) String() string {
 	if t.servername != "" {
@@ -46,25 +65,47 @@ func runSSHCommand(s *ssh.Client, cmd string, r Remote) (string, error) {
 	return stdoutBuf.String(), err
 }
 
-func installServer(s *ssh.Client, r Remote) {
+func checkDaemon(hostname string) int {
+	resp, err := http.Get("http://" + hostname + ":22222/ping")
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+	respText, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0
+	}
+	if strings.TrimSpace(string(respText)) == "ssh-auth-server.pong" {
+		fmt.Println("Successfully installed daemon.")
+		return 1
+	}
+	fmt.Println("Failed to installed daemon.")
+	return 0
+}
+
+func installServer(s *ssh.Client, r Remote) int {
+	if checkDaemon(r.hostname) == 1 {
+		return 1
+	}
 	// let users choose if install server
 	fmt.Print("\nDo you want to install daemon on remote host? [Y/n]")
 	var input string
 	_, _ = fmt.Scanln(&input)
 	if input == "n" || input == "N" {
-		return
+		return 0
 	}
 	// check client key
-	_, clientPublicKey := checkKeyPair()
+	_, clientPublicKey := checkKeyPair(r.username + "@" + r.hostname)
 	// test permission (root or sudo)
-	sudoResult, _ := runSSHCommand(s, "echo -n \"test\" | sudo -S -p \"\" whoami", r)
+	password := "test"
+	sudoResult, _ := runSSHCommand(s, "echo -n \""+password+"\" | sudo -S -p \"\" whoami", r)
 	if strings.TrimSpace(sudoResult) != "root" {
 		// permission denied
 		for {
 			fmt.Printf("[sudo] password for " + r.username + ": ")
 			passwordByte, err := gopass.GetPasswdMasked()
 			fatalErr(err)
-			password := strings.TrimSpace(string(passwordByte))
+			password = strings.TrimSpace(string(passwordByte))
 			sudoResult, _ = runSSHCommand(s, "echo -n \""+password+"\" | sudo -S -p \"\" whoami", r)
 			if strings.TrimSpace(sudoResult) == "root" {
 				break
@@ -82,15 +123,46 @@ func installServer(s *ssh.Client, r Remote) {
 
 	// Upload clientPublicKey to remote: /tmp/ssh-auth-server/client_public.key
 	writeRemote(sftpClient, "/tmp/ssh-auth-server/client_public.key", []byte(clientPublicKey))
-	fmt.Println("Upload clientPublicKey to remote: /tmp/ssh-auth-server/client_public.key")
+	fmt.Println("Uploaded clientPublicKey to remote: /tmp/ssh-auth-server/client_public.key")
 
-	//// Upload executable to remote: /tmp/ssh-auth-server/ssh-auth-server
-	//writeRemote(sftpClient, "/tmp/ssh-auth-server/ssh-auth-server", sshAuthServer)
-	//fmt.Println("Upload executable to remote: /tmp/ssh-auth-server/ssh-auth-server")
-	//
-	//// Install daemon
-	//_, err = runSSHCommand(s, "/tmp/ssh-auth-server/ssh-auth-server --install", r)
-	//fatalErrRemote(r, err)
+	arch, err := runSSHCommand(s, "uname -m", r)
+	fmt.Println("Remote arch: " + strings.TrimSpace(arch))
+	data, err := sshAuthServerBin.ReadFile("bin/ssh-auth-server-linux-" + archMap[strings.TrimSpace(arch)])
+	if err != nil {
+		fmt.Println("Unsupported arch: " + arch)
+		os.Exit(1)
+	}
+
+	fmt.Print("Uploading executable to remote: /tmp/ssh-auth-server/ssh-auth-server...")
+	// Upload executable to remote: /tmp/ssh-auth-server/ssh-auth-server
+	writeRemote(sftpClient, "/tmp/ssh-auth-server/ssh-auth-server", data)
+	fmt.Println("ok")
+
+	// Change permission
+	_, _ = runSSHCommand(s, "chmod +x /tmp/ssh-auth-server/ssh-auth-server", r)
+
+	// Install daemon
+	_, _ = runSSHCommand(s, "echo -n \""+password+"\" | sudo -S -p \"\" /tmp/ssh-auth-server/ssh-auth-server --install", r)
+	fmt.Println("Waiting for daemon to start...")
+	time.Sleep(1 * time.Second)
+	ok := checkDaemon(r.hostname)
+	if ok == 0 {
+		return 0
+	}
+	// Add Client
+	hash := sha256.Sum256([]byte(clientPublicKey))
+	hashHexText := hex.EncodeToString(hash[:])
+	//fmt.Println("publicKey:", clientPublicKey)
+	//fmt.Println("hash     :", hashHexText)
+	//fmt.Println("/tmp/ssh-auth-server/ssh-auth-server -add -client-key /tmp/ssh-auth-server/client_public.key -hash " + hashHexText)
+	result, err := runSSHCommand(s, "/tmp/ssh-auth-server/ssh-auth-server -add -user "+r.username+" -client-key /tmp/ssh-auth-server/client_public.key -hash "+hashHexText, r)
+	fmt.Println(result)
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("Failed to add client.")
+		return 0
+	}
+	return 1
 }
 
 func parseRemote(port int, destination string, usePassword bool, publicKeyPath string) Remote {
@@ -169,6 +241,9 @@ func connectSSH(r Remote, info bool) (sshClient *ssh.Client) {
 	}
 	sshClient, err := ssh.Dial("tcp", addr, clientConfig)
 	fatalErrRemote(r, err)
+	if info {
+		fmt.Println("ok")
+	}
 	return
 }
 
@@ -176,8 +251,5 @@ func connect(r Remote, info bool) *sftp.Client {
 	sshClient := connectSSH(r, info)
 	sftpClient, err := sftp.NewClient(sshClient)
 	fatalErrRemote(r, err)
-	if info {
-		fmt.Println("ok")
-	}
 	return sftpClient
 }

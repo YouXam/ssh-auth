@@ -4,3 +4,6 @@ ssh-auth
 server/client_public.key
 server/ssh-auth-server
 src/ssh-auth-server
+src/bin/*
+bin/*
+test.sh

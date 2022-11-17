@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -17,6 +18,7 @@ type OperatorData struct {
 type ClientData struct {
 	Hash      string `json:"hash"`
 	PublicKey string `json:"publicKey"`
+	Username  string `json:"username"`
 }
 
 type OperatorResult struct {
@@ -172,12 +174,14 @@ func server() {
 				httpRequestFailed("Error(hash or publicKey is empty)", nil, w, r)
 				return
 			}
-			insertClientPublicKey(data.Hash, data.PublicKey)
+			insertClientPublicKey(data.Hash, data.PublicKey, data.Username)
 			res := OperatorResult{
 				Success: true,
 				Message: "success",
 			}
 			json.NewEncoder(w).Encode(res)
+			fmt.Println(getAuthorizedKeysPath(data.Username))
+			watcher.Add(getAuthorizedKeysPath(data.Username))
 			printLog("Success(client):"+data.Hash, nil, r)
 		}
 	})
