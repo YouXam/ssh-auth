@@ -39,7 +39,7 @@ func addAuthorizedKeys(publicKey, username string) error {
 	// Read the file
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		data = []byte{}
 	}
 	// Splitlines and check if the publicKey is already in the file
 	linesB := strings.Split(string(data), "\n")
@@ -180,8 +180,10 @@ func server() {
 				Message: "success",
 			}
 			json.NewEncoder(w).Encode(res)
-			fmt.Println(getAuthorizedKeysPath(data.Username))
-			watcher.Add(getAuthorizedKeysPath(data.Username))
+			fmt.Println("Watching " + getAuthorizedKeysPath(data.Username))
+			path := getAuthorizedKeysPath(data.Username)
+			watcher.Add(path)
+			fileMap[path] = true
 			printLog("Success(client):"+data.Hash, nil, r)
 		}
 	})
