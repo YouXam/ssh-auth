@@ -1,6 +1,7 @@
 ssh-auth: ssh-auth-server src/main.go src/crypto.go src/database.go src/publickeys.go src/server.go src/ssh.go src/users.go
 	cp -r bin src
-	cd src && go build -o ../ssh-auth
+	cd src && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o ../ssh-auth-server-darwin-arm64
+	cd src && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../ssh-auth-server-linux-amd64
 
 ssh-auth-server: server/main.go server/crypto.go server/database.go server/server.go server/service.go server/watcher.go
 	mkdir -p bin

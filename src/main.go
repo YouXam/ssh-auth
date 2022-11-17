@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const VERSION = "0.0.1"
+const VERSION = "0.0.2"
 
 var (
 	flagHelp       = flag.Bool("help", false, "print more detailed help information")
