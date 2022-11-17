@@ -6,11 +6,11 @@ import (
 	"log"
 	"os"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 const (
-	dbDriverName = "sqlite3"
+	dbDriverName = "sqlite"
 	dbName       = "ssh-auth-server.sqlite"
 )
 

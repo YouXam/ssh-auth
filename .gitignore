@@ -1,4 +1,6 @@
+.DS_Store
 .idea
 ssh-auth
 server/client_public.key
 server/ssh-auth-server
+src/ssh-auth-server
