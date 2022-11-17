@@ -17,9 +17,10 @@ var (
 	flagAdd       = flag.Bool("add", false, "Add user")
 	flagClientKey = flag.String("client-key", "", "Client public key")
 	flagHash      = flag.String("hash", "", "Client public key hash")
+	flagUser      = flag.String("user", "", "Username")
 )
 
-func runCommnd(info string, command string, args ...string) {
+func runCommand(info string, command string, args ...string) {
 	cmd := exec.Command(command, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -30,10 +31,11 @@ func runCommnd(info string, command string, args ...string) {
 	}
 }
 
-func httpAdd(clientKey []byte) error {
+func httpAdd(clientKey []byte, username string) error {
 	data := ClientData{
 		Hash:      *flagHash,
 		PublicKey: string(clientKey),
+		Username:  string(username),
 	}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -55,24 +57,24 @@ func httpAdd(clientKey []byte) error {
 func main() {
 	flag.Parse()
 	if *flagInstall {
-		runCommnd("install binary to /usr/local/bin", "sudo", "cp", os.Args[0], "/usr/local/bin/ssh-auth-server")
+		runCommand("install binary to /usr/local/bin", "sudo", "cp", os.Args[0], "/usr/local/bin/ssh-auth-server")
 		err := os.WriteFile("ssh-auth-server.service", []byte(serviceFile), 0644)
 		if err != nil {
 			log.Fatalln("Failed to write service file:", err)
 		}
-		runCommnd("install service file to /etc/systemd/system", "sudo", "cp", "ssh-auth-server.service", "/usr/lib/systemd/system/")
+		runCommand("install service file to /etc/systemd/system", "sudo", "cp", "ssh-auth-server.service", "/usr/lib/systemd/system/")
 		err = os.Remove("ssh-auth-server.service")
 		if err != nil {
 			log.Println("Failed to delete service file:", err)
 		}
-		runCommnd("reload daemon", "sudo", "systemctl", "daemon-reload")
-		runCommnd("enable service", "sudo", "systemctl", "enable", "ssh-auth-server.service")
-		runCommnd("start service", "sudo", "systemctl", "start", "ssh-auth-server.service")
+		runCommand("reload daemon", "sudo", "systemctl", "daemon-reload")
+		runCommand("enable service", "sudo", "systemctl", "enable", "ssh-auth-server.service")
+		runCommand("start service", "sudo", "systemctl", "start", "ssh-auth-server.service")
 	} else if *flagUninstall {
-		runCommnd("stop service", "sudo", "systemctl", "stop", "ssh-auth-server.service")
-		runCommnd("disable service", "sudo", "systemctl", "disable", "ssh-auth-server.service")
-		runCommnd("remove service file", "sudo", "rm", "/usr/lib/systemd/system/ssh-auth-server.service")
-		runCommnd("remove binary", "sudo", "rm", "/usr/local/bin/ssh-auth-server")
+		runCommand("stop service", "sudo", "systemctl", "stop", "ssh-auth-server.service")
+		runCommand("disable service", "sudo", "systemctl", "disable", "ssh-auth-server.service")
+		runCommand("remove service file", "sudo", "rm", "/usr/lib/systemd/system/ssh-auth-server.service")
+		runCommand("remove binary", "sudo", "rm", "/usr/local/bin/ssh-auth-server")
 	} else {
 		initDatabase()
 		if *flagAdd {
@@ -86,10 +88,10 @@ func main() {
 			if err != nil {
 				log.Fatalln("Failed to read client public key:", err)
 			}
-			err = httpAdd(clientKey)
+			err = httpAdd(clientKey, *flagUser)
 			if err != nil {
 				log.Println("Server not running, adding to database directly")
-				err = insertClientPublicKey(*flagHash, string(clientKey))
+				err = insertClientPublicKey(*flagHash, string(clientKey), *flagUser)
 				if err != nil {
 					log.Fatalln("Failed to insert client public key:", err)
 				}

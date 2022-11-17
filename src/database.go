@@ -41,8 +41,7 @@ func createTable() {
 		"port" integer not null,
 		"password" text not null,
 		"privateKey" text not null,
-		"installedDaemon" int not null,
-		"serverPublicKey" text not null
+		"isInstalled" int not null
 	)`)
 	fatalErr(err)
 	_, err = db.Exec(`create table if not exists "publicKeys" (
@@ -59,33 +58,34 @@ func createTable() {
 	fatalErr(err)
 	_, err = db.Exec(`create table if not exists "keyPair"(
     	"id" integer primary key autoincrement,
+    	"destination" text not null,
     	"publicKey" text not null,
     	"privateKey" text not null
 	)`)
 	fatalErr(err)
 }
 
-func getKeyPair() (string, string) {
-	stmt, err := db.Prepare(`select * from keyPair`)
+func getKeyPair(destination string) (string, string) {
+	stmt, err := db.Prepare(`select * from keyPair where destination==?`)
 	fatalErr(err)
 	defer func() { fatalErr(stmt.Close()) }()
-	rows, err := stmt.Query()
+	rows, err := stmt.Query(destination)
 	fatalErr(err)
 	defer func() { fatalErr(rows.Close()) }()
 	if rows.Next() {
 		var id int
-		var publicKey, privateKey string
-		fatalErr(rows.Scan(&id, &publicKey, &privateKey))
-		return publicKey, privateKey
+		var publicKey, privateKey, destination string
+		fatalErr(rows.Scan(&id, &destination, &publicKey, &privateKey))
+		return privateKey, publicKey
 	}
 	return "", ""
 }
 
-func insertKeyPair(privateKey, publicKey string) {
-	stmt, err := db.Prepare(`insert into keyPair (privateKey, publicKey) values(?, ?)`)
+func insertKeyPair(destination, privateKey, publicKey string) {
+	stmt, err := db.Prepare(`insert into keyPair (destination, privateKey, publicKey) values(?, ?, ?)`)
 	fatalErr(err)
 	defer func() { fatalErr(stmt.Close()) }()
-	_, err = stmt.Exec(privateKey, publicKey)
+	_, err = stmt.Exec(destination, privateKey, publicKey)
 	fatalErr(err)
 }
 
@@ -331,10 +331,11 @@ func deleteServerByID(id int) {
 	fatalErr(err)
 }
 
-func insertServer(hostname string, port int, username string, servername string, password string, key string) bool {
-	pre, err := findServerByName(servername)
-	if err == nil && (pre.hostname != hostname || pre.username != username || pre.port != port) {
-		fatalErr(fmt.Errorf("server %s has already exists", hostname))
+func insertServer(hostname string, port int, username string, servername string, password string, key string, isInstalled int) bool {
+	_, err := findServerByName(servername)
+	//if err == nil && (pre.hostname == hostname || pre.username == username || pre.port == port) {
+	if err == nil {
+		fatalErr(fmt.Errorf("server %v has already exists", servername))
 	}
 	stmt, err := db.Prepare(`select * from servers where hostname==? and username==? and port==?`)
 	fatalErr(err)
@@ -346,17 +347,17 @@ func insertServer(hostname string, port int, username string, servername string,
 	exists := rows.Next()
 	fatalErr(rows.Close())
 	if !exists {
-		stmt2, err := db.Prepare(`insert into servers (name, hostname, username, port, password, privateKey) values(?, ?, ?, ?, ?, ?)`)
+		stmt2, err := db.Prepare(`insert into servers (name, hostname, username, port, password, privateKey, isInstalled) values(?, ?, ?, ?, ?, ?, ?)`)
 		fatalErr(err)
 		defer func() { fatalErr(stmt.Close()) }()
-		_, err = stmt2.Exec(servername, hostname, username, port, password, key)
+		_, err = stmt2.Exec(servername, hostname, username, port, password, key, isInstalled)
 		fatalErr(err)
 		return true
 	} else {
-		stmt2, err := db.Prepare(`update servers set name=?, password=?, privateKey=? where hostname==? and username==? and port==?`)
+		stmt2, err := db.Prepare(`update servers set name=?, password=?, privateKey=?, isInstalled=? where hostname==? and username==? and port==?`)
 		fatalErr(err)
 		defer func() { fatalErr(stmt2.Close()) }()
-		_, err = stmt2.Exec(servername, password, key, hostname, username, port)
+		_, err = stmt2.Exec(servername, password, key, isInstalled, hostname, username, port)
 		fatalErr(err)
 		return false
 	}

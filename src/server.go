@@ -10,8 +10,8 @@ func addServer(destination string, port int, usePassword bool, publicKeyPath str
 	r := parseRemote(port, destination, usePassword, publicKeyPath)
 	fmt.Println("Testing ssh connection...")
 	sshClient := connectSSH(r, true)
-	installServer(sshClient, r)
-	if insertServer(r.hostname, r.port, r.username, serverName, r.password, r.privateKey) {
+	isInstalled := installServer(sshClient, r)
+	if insertServer(r.hostname, r.port, r.username, serverName, r.password, r.privateKey, isInstalled) {
 		fmt.Printf("Successfully added server %v.\n", r)
 	} else {
 		fmt.Printf("Successfully modified server %v.\n", r)
@@ -31,8 +31,9 @@ func editServer(destination string, port int, usePassword bool, publicKeyPath st
 		r.servername = serverName
 	}
 	fmt.Println("Testing ssh connection...")
-	connect(r, true)
-	insertServer(r.hostname, r.port, r.username, serverName, r.password, r.privateKey)
+	sshClient := connectSSH(r, true)
+	isInstalled := installServer(sshClient, r)
+	insertServer(r.hostname, r.port, r.username, serverName, r.password, r.privateKey, isInstalled)
 }
 
 func showServer() {

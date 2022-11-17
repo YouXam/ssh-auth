@@ -11,16 +11,16 @@ import (
 	"strings"
 )
 
-func checkKeyPair() (privateKey string, publicKey string) {
+func checkKeyPair(destination string) (privateKey string, publicKey string) {
 	// check if key pair exists
-	privateKey, publicKey = getKeyPair()
+	privateKey, publicKey = getKeyPair(destination)
 	if privateKey != "" && publicKey != "" {
 		return
 	}
 	// generate key pair
 	privateKey, publicKey, err := generateKeyPair()
 	fatalErr(err)
-	insertKeyPair(privateKey, publicKey)
+	insertKeyPair(destination, privateKey, publicKey)
 	return
 }
 

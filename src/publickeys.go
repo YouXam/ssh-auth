@@ -1,15 +1,118 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/liushuochen/gotable"
 	"github.com/pkg/sftp"
 	"io"
+	"net/http"
 	"strconv"
 	"strings"
 )
 
-func read(sftpClient *sftp.Client, r Remote) string {
+type OperatorData struct {
+	Hash      string
+	PublicKey string
+	Sign      string
+}
+
+type OperatorResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// httpRequest sends a request to the server to add or delete the public key via http.
+func httpRequest(hostname, sshPublicKey, privateKey, hashHexText, op string) error {
+	signText, err := sign(sshPublicKey, privateKey)
+	fatalErr(err)
+	data := OperatorData{
+		Hash:      hashHexText,
+		PublicKey: sshPublicKey,
+		Sign:      signText,
+	}
+
+	// convert data to json string
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	resp, err := http.Post("http://"+hostname+":22222/"+op, "application/json", strings.NewReader(string(jsonData)))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	respText, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	// json decode
+	var result OperatorResult
+	err = json.Unmarshal(respText, &result)
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return fmt.Errorf(result.Message)
+	}
+	return nil
+}
+
+// httpOperations sends multi requests to the server to add or delete the public key via httpRequest.
+func httpOperations(destination string, sshPublicKeys []string, op string) (int, error) {
+	if op != "add" && op != "del" {
+		fatalErr(fmt.Errorf("invalid operation %s", op))
+	}
+	privateKey, publicKey := checkKeyPair(destination)
+	hash := sha256.Sum256([]byte(publicKey))
+	hashHexText := hex.EncodeToString(hash[:])
+	//fmt.Println("publicKey:", publicKey)
+	//fmt.Println("hash     :", hashHexText)
+	success := 0
+	for _, p := range sshPublicKeys {
+		hostname := strings.Split(destination, "@")[1]
+		err := httpRequest(hostname, p, privateKey, hashHexText, op)
+		if err != nil {
+			return 0, err
+		} else {
+			success += 1
+		}
+	}
+	return success, nil
+}
+
+// sftpAdd adds public keys to remote server via sftp.
+func sftpAdd(sshPublicKeys []string, r Remote, info bool) int {
+	sftpClient := connect(r, info)
+	defer func() { fatalErr(sftpClient.Close()) }()
+	content := readRemote(sftpClient, r)
+	publicKeysTmp := strings.Split(content, "\n")
+	publicKeysMap := map[string]bool{}
+	publicKeyTexts := make([]string, 0)
+	for _, e := range publicKeysTmp {
+		key := strings.TrimSpace(e)
+		if key != "" {
+			publicKeyTexts = append(publicKeyTexts, key)
+			publicKeysMap[key] = true
+		}
+	}
+	cnt := 0
+	for _, e := range sshPublicKeys {
+		if _, ok := publicKeysMap[e]; !ok {
+			publicKeyTexts = append(publicKeyTexts, e)
+			publicKeysMap[e] = true
+			cnt += 1
+		}
+	}
+	newContent := strings.Join(publicKeyTexts, "\n")
+	writeRemote(sftpClient, getAuthorizedKeysPath(r.username), []byte(newContent))
+	return cnt
+}
+
+// readRemote reads the content of the remote file via sftp.
+func readRemote(sftpClient *sftp.Client, r Remote) string {
 	remotePath := "/home/" + r.username + "/.ssh/authorized_keys"
 	if r.username == "root" {
 		remotePath = "/root/.ssh/authorized_keys"
@@ -17,13 +120,14 @@ func read(sftpClient *sftp.Client, r Remote) string {
 	srcFile, err := sftpClient.Open(remotePath)
 	fatalErr(err)
 	defer func() { fatalErr(srcFile.Close()) }()
-	// read remote file and check
+	// readRemote remote file and check
 	data, err := io.ReadAll(srcFile)
 	fatalErr(err)
 	content := string(data)
 	return content
 }
 
+// getAuthorizedKeysPath return the path of authorized_keys file by username.
 func getAuthorizedKeysPath(username string) string {
 	if username == "root" {
 		return "/root/.ssh/authorized_keys"
@@ -31,6 +135,7 @@ func getAuthorizedKeysPath(username string) string {
 	return "/home/" + username + "/.ssh/authorized_keys"
 }
 
+// writeRemote writes remote file to the remote file via sftp.
 func writeRemote(sftpClient *sftp.Client, path string, content []byte) {
 	srcFile2, err := sftpClient.Create(path)
 	fatalErr(err)
@@ -40,39 +145,31 @@ func writeRemote(sftpClient *sftp.Client, path string, content []byte) {
 	fatalErr(err)
 }
 
+// copyPublicKeysWithRemote copies public keys to remote server via http or sftp (http first)
 func copyPublicKeysWithRemote(r Remote, name []string, info bool) {
-	// When "info" is true, the function is called concurrently, so print log only one time.
-	sftpClient := connect(r, info)
-	defer func() { fatalErr(sftpClient.Close()) }()
-	content := read(sftpClient, r)
 	publicKeys := make([]string, 0)
-	publicKeysTmp := strings.Split(content, "\n")
-	publicKeysMap := map[string]bool{}
-	for _, e := range publicKeysTmp {
-		key := strings.TrimSpace(e)
-		if key != "" {
-			publicKeys = append(publicKeys, key)
-			publicKeysMap[key] = true
-		}
-	}
-	// insert public key when it is not exists
-	cnt := 0
 	for _, e := range name {
 		uid := findUserId(e)
 		if uid < 0 {
-			fatalErr(fmt.Errorf("can not find user %s", e))
+			fmt.Printf("Can not find user %s\n", e)
 		}
 		res := findPublicKeys(e)
 		for _, h := range res {
-			if _, ok := publicKeysMap[h]; !ok {
-				publicKeys = append(publicKeys, h)
-				publicKeysMap[h] = true
-				cnt += 1
-			}
+			publicKeys = append(publicKeys, h)
 		}
 	}
-	newContent := strings.Join(publicKeys, "\n")
-	writeRemote(sftpClient, getAuthorizedKeysPath(r.username), []byte(newContent))
+	cnt := 0
+	// When "info" is true, the function is called concurrently, so print log only one time.
+	if r.isInstalled == 1 {
+		var err error
+		cnt, err = httpOperations(r.username+"@"+r.hostname, publicKeys, "add")
+		if err != nil {
+			fmt.Println("Failed to add public keys to remote server via http(" + err.Error() + "), try sftp.")
+			cnt = sftpAdd(publicKeys, r, info)
+		}
+	} else {
+		cnt = sftpAdd(publicKeys, r, info)
+	}
 	if info {
 		if cnt <= 1 {
 			fmt.Printf("Successfully copied %d key.\n", cnt)
@@ -97,6 +194,7 @@ func copyPublicKeysWithRemote(r Remote, name []string, info bool) {
 	}
 }
 
+// copyPublicKeys parse destination and copy public keys to remote server via copyPublicKeysWithRemote.
 func copyPublicKeys(destination string, port int, name []string, usePassword bool, privateKey string) {
 	r, err := findServer(destination)
 	if err != nil {
@@ -112,6 +210,7 @@ func copyPublicKeys(destination string, port int, name []string, usePassword boo
 	copyPublicKeysWithRemote(r, name, true)
 }
 
+// extractName extracts username from links.
 func extractName(links []Link) []string {
 	names := make([]string, len(links))
 	for i, e := range links {
@@ -120,6 +219,7 @@ func extractName(links []Link) []string {
 	return names
 }
 
+// syncPublicKeys syncs public keys to remote server via copyPublicKeysWithRemote.
 func syncPublicKeys(serversName []string) {
 	servers := make([]Remote, 0)
 	if len(serversName) == 0 {
@@ -160,6 +260,7 @@ func syncPublicKeys(serversName []string) {
 	}
 }
 
+// showLinks shows links of remote server.
 func showLinks() {
 	table, _ := gotable.Create("ID", "User", "Server")
 	links := getLinks()
@@ -172,6 +273,47 @@ func showLinks() {
 	fmt.Print(table)
 }
 
+// delLinks deletes links of remote server via http or sftp (http first).
+func delLinks(ids []Link) {
+	servers := make(map[int][]Link)
+	for _, e := range ids {
+		servers[e.serverID] = append(servers[e.serverID], e)
+	}
+	for k, v := range servers {
+		server := findServerById(k)
+		deleted := 0
+		if server.isInstalled == 1 {
+			publicKeys := make([]string, 0)
+			for _, e := range v {
+				relatedPublicKeys := relatedPublicKey(e)
+				for _, h := range relatedPublicKeys {
+					if ifRemovePublicKey(e, h) {
+						publicKeys = append(publicKeys, h)
+					}
+				}
+			}
+			var err error
+			deleted, err = httpOperations(server.username+"@"+server.hostname, publicKeys, "del")
+			if err != nil {
+				fmt.Println("Failed to delete public keys from remote server via http(" + err.Error() + "), try sftp.")
+				deleted = sftpDelLinks(v, server)
+			} else {
+				for _, e := range v {
+					deleteLinkById(e.id)
+				}
+			}
+		} else {
+			deleted = sftpDelLinks(v, server)
+		}
+		if deleted == 1 {
+			fmt.Printf("Deleted %d key from server %v.\n", deleted, server.String())
+		} else {
+			fmt.Printf("Deleted %d keys from server %v.\n", deleted, server.String())
+		}
+	}
+}
+
+// delLinksByStrings deletes links by link id via http or sftp (http first).
 func delLinksByStrings(ids []string) {
 	idi := make([]Link, len(ids))
 	for i, e := range ids {
@@ -182,44 +324,33 @@ func delLinksByStrings(ids []string) {
 	delLinks(idi)
 }
 
-func delLinks(ids []Link) {
-	removeServer := map[int][]Link{}
-	for _, link := range ids {
-		removeServer[link.serverID] = append(removeServer[link.serverID], link)
-	}
-	for serverID, links := range removeServer {
-		r := findServerById(serverID)
-		sftpClient := connect(r, true)
-		content := read(sftpClient, r)
-		publicKeys := map[string]bool{}
-		deleted := 0
-		for _, e := range strings.Split(content, "\n") {
-			if e != "" {
-				publicKeys[e] = true
-			}
-		}
-		for _, link := range links {
-			linkPublicKeys := relatedPublicKey(link)
-			for _, e := range linkPublicKeys {
-				if ifRemovePublicKey(link, e) {
-					publicKeys[e] = false
-					deleted += 1
-				}
-			}
-			deleteLinkById(link.id)
-		}
-		newPublicKeys := make([]string, 0)
-		for k, v := range publicKeys {
-			if v {
-				newPublicKeys = append(newPublicKeys, k)
-			}
-		}
-		newContent := strings.Join(newPublicKeys, "\n")
-		writeRemote(sftpClient, getAuthorizedKeysPath(r.username), []byte(newContent))
-		if deleted == 1 {
-			fmt.Printf("Deleted %d key from server %v.\n", deleted, r.String())
-		} else {
-			fmt.Printf("Deleted %d keys from server %v.\n", deleted, r.String())
+// sftpDelLinks deletes links via sftp.
+func sftpDelLinks(links []Link, r Remote) (deleted int) {
+	sftpClient := connect(r, true)
+	content := readRemote(sftpClient, r)
+	publicKeys := map[string]bool{}
+	for _, e := range strings.Split(content, "\n") {
+		if e != "" {
+			publicKeys[e] = true
 		}
 	}
+	for _, link := range links {
+		linkPublicKeys := relatedPublicKey(link)
+		for _, e := range linkPublicKeys {
+			if ifRemovePublicKey(link, e) {
+				publicKeys[e] = false
+				deleted += 1
+			}
+		}
+		deleteLinkById(link.id)
+	}
+	newPublicKeys := make([]string, 0)
+	for k, v := range publicKeys {
+		if v {
+			newPublicKeys = append(newPublicKeys, k)
+		}
+	}
+	newContent := strings.Join(newPublicKeys, "\n")
+	writeRemote(sftpClient, getAuthorizedKeysPath(r.username), []byte(newContent))
+	return
 }
