@@ -122,6 +122,9 @@ func installServer(s *ssh.Client, r Remote) int {
 
 	// test permission (root or sudo)
 	password := "test"
+	if r.password != "" {
+		password = r.password
+	}
 	sudoResult, _ := runSSHCommand(s, "echo -n \""+password+"\" | sudo -S -p \"\" whoami", r)
 	if strings.TrimSpace(sudoResult) != "root" {
 		// permission denied
